@@ -1,8 +1,10 @@
 import { Feet, NauticalMiles } from 'msfs-geo';
-import { DatabaseItem, Knots, FlightLevel, ElevatedCoordinates } from './Common';
+import { DatabaseItem, Knots, FlightLevel, ElevatedCoordinates, FixType } from './Common';
 import { RunwaySurfaceType } from './Runway';
 
 export interface Airport extends DatabaseItem {
+    fixType: FixType.Airport,
+
     /**
      * Airport long name
      */

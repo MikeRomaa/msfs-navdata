@@ -1,7 +1,7 @@
 import { Coordinates, NauticalMiles } from 'msfs-geo';
 import {
     Airport,
-    AirwayLevel,
+    Level,
     Approach,
     Arrival,
     Departure,
@@ -18,7 +18,7 @@ import {
     Waypoint,
     DatabaseIdent,
     DataInterface,
-    RestrictiveAirspace,
+    RestrictiveAirspace, ProcedureType,
 } from '../shared';
 import { AirportCommunication } from '../shared/types/Communication';
 import { ControlledAirspace } from '../shared/types/Airspace';
@@ -46,30 +46,20 @@ export class Database {
         return runways;
     }
 
-    public async getDepartures(airportIdentifier: string, runwayIdentifier?: string): Promise<Departure[]> {
-        let departures = await this.backend.getDepartures(airportIdentifier);
-        if (runwayIdentifier) {
-            departures = departures.filter((departure) => departure.runwayTransitions.find((trans) => trans.ident === runwayIdentifier));
-        }
-        return departures;
+    public async getDepartures(airportIdentifier: string, idents: string[]): Promise<Departure[]> {
+        return this.backend.getDepartures(airportIdentifier, idents);
     }
 
-    public async getArrivals(airportIdentifier: string, approach?: Approach): Promise<Arrival[]> {
-        let arrivals = await this.backend.getArrivals(airportIdentifier);
-        if (approach) {
-            const runwayIdentifier = Database.approachToRunway(approach.ident);
-            arrivals = arrivals.filter((arrival) => arrival.runwayTransitions.find((trans) => runwayIdentifier === null || trans.ident === runwayIdentifier));
-        }
-        return arrivals;
+    public async getArrivals(airportIdentifier: string, idents: string[]): Promise<Arrival[]> {
+        return this.backend.getArrivals(airportIdentifier, idents);
     }
 
-    public async getApproaches(airportIdentifier: string, arrival?: Arrival): Promise<Approach[]> {
-        let approaches = await this.backend.getApproaches(airportIdentifier);
-        if (arrival) {
-            approaches = approaches.filter((approach) => arrival.runwayTransitions
-                .find((trans) => Database.approachToRunway(approach.ident) === null || trans.ident === Database.approachToRunway(approach.ident)));
-        }
-        return approaches;
+    public async getApproaches(airportIdentifier: string, idents: string[]): Promise<Approach[]> {
+        return this.backend.getApproaches(airportIdentifier, idents);
+    }
+
+    public async getProcedureSummary(airportIdentifier: string, type: ProcedureType, runways?: string[]): Promise<string[]> {
+        return this.backend.getProcedureSummary(airportIdentifier, type, runways);
     }
 
     public async getHolds(fixIdentifier: string, airportIdentifier: string): Promise<ProcedureLeg[]> {
@@ -120,7 +110,7 @@ export class Database {
         return this.backend.getNearbyAirports(center, range);
     }
 
-    public getNearbyAirways(center: Coordinates, range: number, levels?: AirwayLevel): Promise<Airway[]> {
+    public getNearbyAirways(center: Coordinates, range: number, levels?: Level): Promise<Airway[]> {
         return this.backend.getNearbyAirways(center, range, levels);
     }
 

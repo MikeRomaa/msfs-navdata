@@ -1,12 +1,20 @@
 import { Coordinates, Degrees, DegreesMagnetic, Feet } from 'msfs-geo';
-import { DatabaseItem, KiloHertz, LsCategory } from './Common';
+import { DatabaseItem, FixType, KiloHertz, LsCategory } from './Common';
 
 export interface IlsNavaid extends DatabaseItem {
+    fixType: FixType.IlsNavaid,
+
     frequency: KiloHertz;
     category: LsCategory;
     runwayIdent: string;
-    locLocation: Coordinates;
-    locBearing: DegreesMagnetic;
+    /**
+     * The Location of the localizer
+     */
+    location: Coordinates;
+    /**
+     * The magnetic bearing of the localizer
+     */
+    bearing: DegreesMagnetic;
     gsLocation?: Coordinates & { alt?: Feet };
     gsSlope?: Degrees;
     /**

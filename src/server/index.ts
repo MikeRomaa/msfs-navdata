@@ -6,9 +6,9 @@ import { Airport } from '../shared/types/Airport';
 import { Runway } from '../shared/types/Runway';
 import { Waypoint } from '../shared/types/Waypoint';
 import { ControlledAirspace } from '../shared/types/Airspace';
-import { NdbNavaid, NdbClass } from '../shared/types/NdbNavaid';
-import { Airway, AirwayLevel } from '../shared/types/Airway';
-import { IlsNavaid, RestrictiveAirspace, VhfNavaid, VhfNavaidType, VorClass } from '../shared';
+import { NdbClass, NdbNavaid } from '../shared/types/NdbNavaid';
+import { Airway } from '../shared/types/Airway';
+import { IlsNavaid, Level, ProcedureType, RestrictiveAirspace, VhfNavaid, VhfNavaidType, VorClass } from '../shared';
 
 // utility functions to parse user input
 
@@ -135,13 +135,13 @@ function parseAirwayIdent(ident: string): string {
     return ident.toUpperCase();
 }
 
-function parseAirwayLevels(levels: string): AirwayLevel {
+function parseAirwayLevels(levels: string): Level {
     try {
         return parseFlagOptionList(levels, {
-            both: AirwayLevel.Both,
-            low: AirwayLevel.Low,
-            high: AirwayLevel.High,
-            all: AirwayLevel.Both | AirwayLevel.Low | AirwayLevel.High,
+            both: Level.Both,
+            low: Level.Low,
+            high: Level.High,
+            all: Level.Both | Level.Low | Level.High,
         });
     } catch (e) {
         throw new InputError(`Invalid airway levels "${levels}"`);
@@ -382,10 +382,14 @@ export function msfsNavdataRouter(provider: NavigraphProvider, development: bool
         }
     });
 
-    router.get('/airport/:ident/departures', (req, res) => {
+    router.get('/airport/:ident/departures/summary', (req, res) => {
         try {
             const ident = parseAirportIdent(req.params.ident);
-            provider.getDepartures(ident).then((departures) => {
+            let { runway }: any = req.query;
+            if (runway && typeof runway === 'string') {
+                runway = [runway];
+            }
+            provider.getProcedureSummary(ident, ProcedureType.Departure, runway).then((departures) => {
                 res.json(departures);
             }).catch((error) => errorResponse(error, res));
         } catch (error) {
@@ -393,10 +397,38 @@ export function msfsNavdataRouter(provider: NavigraphProvider, development: bool
         }
     });
 
-    router.get('/airport/:ident/arrivals', (req, res) => {
+    router.get('/airport/:ident/departures/:idents', (req, res) => {
         try {
             const ident = parseAirportIdent(req.params.ident);
-            provider.getArrivals(ident).then((arrivals) => {
+            const idents = parseMultipleIdents(req.params.idents, (string) => string);
+            provider.getDepartures(ident, idents).then((departures) => {
+                res.json(departures);
+            }).catch((error) => errorResponse(error, res));
+        } catch (error) {
+            errorResponse(error, res);
+        }
+    });
+
+    router.get('/airport/:ident/arrivals/summary', (req, res) => {
+        try {
+            const ident = parseAirportIdent(req.params.ident);
+            let { runway }: any = req.query;
+            if (runway && typeof runway === 'string') {
+                runway = [runway];
+            }
+            provider.getProcedureSummary(ident, ProcedureType.Arrival, runway).then((departures) => {
+                res.json(departures);
+            }).catch((error) => errorResponse(error, res));
+        } catch (error) {
+            errorResponse(error, res);
+        }
+    });
+
+    router.get('/airport/:ident/arrivals/:idents', (req, res) => {
+        try {
+            const ident = parseAirportIdent(req.params.ident);
+            const idents = parseMultipleIdents(req.params.idents, (string) => string);
+            provider.getArrivals(ident, idents).then((arrivals) => {
                 res.json(arrivals);
             }).catch((error) => errorResponse(error, res));
         } catch (error) {
@@ -415,10 +447,22 @@ export function msfsNavdataRouter(provider: NavigraphProvider, development: bool
         }
     });
 
-    router.get('/airport/:ident/approaches', (req, res) => {
+    router.get('/airport/:ident/approaches/summary', (req, res) => {
         try {
             const ident = parseAirportIdent(req.params.ident);
-            provider.getApproaches(ident).then((approaches) => {
+            provider.getProcedureSummary(ident, ProcedureType.Approach).then((approaches) => {
+                res.json(approaches);
+            }).catch((error) => errorResponse(error, res));
+        } catch (error) {
+            errorResponse(error, res);
+        }
+    });
+
+    router.get('/airport/:ident/approaches/:idents', (req, res) => {
+        try {
+            const ident = parseAirportIdent(req.params.ident);
+            const idents = parseMultipleIdents(req.params.idents, (string) => string);
+            provider.getApproaches(ident, idents).then((approaches) => {
                 res.json(approaches);
             }).catch((error) => errorResponse(error, res));
         } catch (error) {

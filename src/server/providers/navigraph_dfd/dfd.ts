@@ -6,7 +6,6 @@ import {
     Airport,
     AirportCommunication,
     Airway,
-    AirwayLevel,
     Approach,
     Arrival,
     ControlledAirspace,
@@ -14,10 +13,11 @@ import {
     DataInterface,
     Departure,
     IlsNavaid,
-    Marker,
+    Level, Marker,
     NdbClass,
     NdbNavaid,
     ProcedureLeg,
+    ProcedureType,
     RestrictiveAirspace,
     Runway,
     VhfNavaid,
@@ -113,8 +113,8 @@ export class NavigraphProvider implements DataInterface {
         const stmt = this.database.prepare(sql, [].concat(...new Array(queries.length).fill(params)));
         try {
             const rows = query(stmt);
-            const navaids: NaviWaypoint[] = NavigraphProvider.toCamel(rows);
-            return navaids.map(((navaid) => this.mappers.mapWaypoint(navaid, ppos))).sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+            const waypoints: NaviWaypoint[] = NavigraphProvider.toCamel(rows);
+            return waypoints.map(((waypoint) => this.mappers.mapWaypoint(waypoint, ppos))).sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
         } finally {
             stmt.free();
         }
@@ -188,12 +188,15 @@ export class NavigraphProvider implements DataInterface {
         }).filter((ap) => (ap.distance ?? 0) <= range).sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0)));
     }
 
-    async getDepartures(airportIdentifier: string): Promise<Departure[]> {
+    async getDepartures(airportIdentifier: string, idents: string[]): Promise<Departure[]> {
         const airports = await this.getAirports([airportIdentifier]);
         if (airports.length < 1) {
             return Promise.reject(new Error('Invalid airport'));
         }
-        const stmt = this.database.prepare('SELECT * FROM tbl_sids WHERE airport_identifier=$ident', { $ident: airportIdentifier });
+        const stmt = this.database.prepare(
+            `SELECT * FROM tbl_sids WHERE airport_identifier = ? AND procedure_identifier IN (${idents.map(() => '?').join(',')})`,
+            [airportIdentifier, ...idents],
+        );
         try {
             const rows = query(stmt);
             const departureLegs: NaviProcedure[] = NavigraphProvider.toCamel(rows);
@@ -203,12 +206,15 @@ export class NavigraphProvider implements DataInterface {
         }
     }
 
-    async getArrivals(airportIdentifier: string): Promise<Arrival[]> {
+    async getArrivals(airportIdentifier: string, idents: string[]): Promise<Arrival[]> {
         const airports = await this.getAirports([airportIdentifier]);
         if (airports.length < 1) {
             return Promise.reject(new Error('Invalid airport'));
         }
-        const stmt = this.database.prepare('SELECT * FROM tbl_stars WHERE airport_identifier=$ident', { $ident: airportIdentifier });
+        const stmt = this.database.prepare(
+            `SELECT * FROM tbl_stars WHERE airport_identifier = ? AND procedure_identifier IN (${idents.map(() => '?').join(',')})`,
+            [airportIdentifier, ...idents],
+        );
         try {
             const rows = query(stmt);
             const arrivalLegs: NaviProcedure[] = NavigraphProvider.toCamel(rows);
@@ -218,12 +224,15 @@ export class NavigraphProvider implements DataInterface {
         }
     }
 
-    async getApproaches(airportIdentifier: string): Promise<Approach[]> {
+    async getApproaches(airportIdentifier: string, idents: string[]): Promise<Approach[]> {
         const airports = await this.getAirports([airportIdentifier]);
         if (airports.length < 1) {
             return Promise.reject(new Error('Invalid airport'));
         }
-        const stmt = this.database.prepare('SELECT * FROM tbl_iaps WHERE airport_identifier=$ident', { $ident: airportIdentifier });
+        const stmt = this.database.prepare(
+            `SELECT * FROM tbl_iaps WHERE airport_identifier = ? AND procedure_identifier IN (${idents.map(() => '?').join(',')})`,
+            [airportIdentifier, ...idents],
+        );
         try {
             const rows = query(stmt);
             const approachLegs: NaviProcedure[] = NavigraphProvider.toCamel(rows);
@@ -264,7 +273,8 @@ export class NavigraphProvider implements DataInterface {
         try {
             const rows = query(stmt);
             const airways: NaviAirwayFix[] = NavigraphProvider.toCamel(rows);
-            return (this.mappers.mapAirways(airways).filter((airway) => airway.fixes.find((fix) => fix.ident === ident)));
+            const mapped = await this.mappers.mapAirways(airways);
+            return mapped.filter((airway) => airway.fixes.find((fix) => fix?.ident === ident && fix?.icaoCode === icaoCode));
         } finally {
             stmt.free();
         }
@@ -332,7 +342,7 @@ export class NavigraphProvider implements DataInterface {
         return results.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
     }
 
-    async getNearbyAirways(centre: Coordinates, range: NauticalMiles, levels?: AirwayLevel): Promise<Airway[]> {
+    async getNearbyAirways(centre: Coordinates, range: NauticalMiles, levels?: Level): Promise<Airway[]> {
         const [sqlWhere, sqlParams] = NavigraphProvider.nearbyBoundingBoxQuery(centre, range, 'waypoint_');
         // TODO: This currently loads all Airways with a route_identifier which is the same as an in range airway.
         // Queries significantly more airways than it should, the distanceTo fixes it but bad performance
@@ -340,7 +350,7 @@ export class NavigraphProvider implements DataInterface {
             `SELECT * FROM tbl_enroute_airways WHERE route_identifier IN (SELECT route_identifier FROM tbl_enroute_airways WHERE ${sqlWhere})`,
             sqlParams,
         ));
-        const airways = this.mappers.mapAirways(NavigraphProvider.toCamel(rows)).filter((airway) => airway.fixes.find((fix) => distanceTo(fix.location, centre) < range));
+        const airways = (await this.mappers.mapAirways(NavigraphProvider.toCamel(rows))).filter((airway) => airway.fixes.find((fix) => distanceTo(fix.location, centre) < range));
         if (levels === undefined) {
             return airways;
         }
@@ -380,7 +390,7 @@ export class NavigraphProvider implements DataInterface {
         const navaids: NaviVhfNavaid[] = NavigraphProvider.toCamel(rows);
         return navaids.map((navaid) => {
             const na = this.mappers.mapVhfNavaid(navaid);
-            const loc = na.vorLocation ?? na.dmeLocation;
+            const loc = na.location ?? na.dmeLocation;
             na.distance = distanceTo(centre, { lat: (loc?.lat ?? centre.lat), long: (loc?.long ?? centre.long) });
             return na;
         }).filter((na) => (na.distance ?? 0) <= range
@@ -492,6 +502,39 @@ export class NavigraphProvider implements DataInterface {
             return rows.map((communication) => this.mappers.mapAirportCommunication(communication));
         } finally {
             stmt.free();
+        }
+    }
+
+    async getProcedureSummary(airportIdentifier: string, type: ProcedureType, runways?: string[]): Promise<string[]> {
+        if (type === ProcedureType.Approach) {
+            const stmt = this.database.prepare(
+                'SELECT procedure_identifier FROM tbl_iaps WHERE airport_identifier = ? GROUP BY procedure_identifier',
+                [airportIdentifier],
+            );
+            try {
+                const rows = NavigraphProvider.toCamel(query(stmt));
+                return rows.map((procedure: { procedureIdentifier: string }) => procedure.procedureIdentifier);
+            } finally {
+                stmt.free();
+            }
+        } else {
+            const params = [airportIdentifier];
+            let sqlFilter = '';
+            runways?.forEach((runway, index, array) => {
+                params.push(runway);
+                params.push(`${runway.substr(0, 4)}B`);
+                sqlFilter += `transition_identifier = ? OR transition_identifier = ? OR transition_identifier = 'ALL'${index < array.length - 1 ? ' OR ' : ''}`;
+            });
+            const sql = `SELECT procedure_identifier, transition_identifier FROM ${type === ProcedureType.Departure ? 'tbl_sids' : 'tbl_stars'}
+                WHERE airport_identifier = ? ${runways ? `AND (${sqlFilter})` : ''}
+                GROUP BY procedure_identifier`;
+            const stmt = this.database.prepare(sql, params);
+            try {
+                const rows = NavigraphProvider.toCamel(query(stmt));
+                return rows.map((procedure: { procedureIdentifier: string }) => procedure.procedureIdentifier);
+            } finally {
+                stmt.free();
+            }
         }
     }
 }

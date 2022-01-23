@@ -1,8 +1,10 @@
 import { Coordinates, NauticalMiles } from 'msfs-geo';
-import { WaypointArea } from '..';
+import { FixType, WaypointArea } from '..';
 import { DatabaseItem, KiloHertz } from './Common';
 
 export interface NdbNavaid extends DatabaseItem {
+    fixType: FixType.NdbNavaid,
+
     frequency: KiloHertz,
     location: Coordinates,
     class: NdbClass,

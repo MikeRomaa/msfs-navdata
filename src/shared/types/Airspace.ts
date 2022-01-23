@@ -1,4 +1,5 @@
 import { Coordinates, DegreesTrue, NauticalMiles } from 'msfs-geo';
+import { Level } from './Common';
 
 export enum ControlledAirspaceType {
     ClassC,

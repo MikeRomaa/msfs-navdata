@@ -2,10 +2,12 @@ import { Degrees, DegreesMagnetic, DegreesTrue, Feet, Metres } from 'msfs-geo';
 import {
     LsCategory,
     DatabaseItem,
-    ElevatedCoordinates,
+    ElevatedCoordinates, FixType,
 } from './Common';
 
 export interface Runway extends DatabaseItem {
+    fixType: FixType.Runway,
+
     airportIdent: string,
     bearing: DegreesTrue,
     magneticBearing: DegreesMagnetic,
@@ -14,9 +16,9 @@ export interface Runway extends DatabaseItem {
      */
     gradient: Degrees,
     /**
-     * Location, including altitude (if available), of the threshold
+     * Threshold location (including elevation)
      */
-    thresholdLocation: ElevatedCoordinates,
+    location: ElevatedCoordinates,
     thresholdCrossingHeight: Feet,
     length: Metres,
     width: Metres,

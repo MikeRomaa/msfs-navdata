@@ -1,8 +1,10 @@
 import { Coordinates, Degrees, Feet, NauticalMiles } from 'msfs-geo';
-import { ElevatedCoordinates, WaypointArea } from '..';
+import { FixType, WaypointArea } from '..';
 import { DatabaseItem, MegaHertz } from './Common';
 
 export interface VhfNavaid extends DatabaseItem {
+    fixType: FixType.VhfNavaid,
+
     frequency: MegaHertz,
     figureOfMerit: FigureOfMerit,
     range: NauticalMiles,
@@ -12,7 +14,7 @@ export interface VhfNavaid extends DatabaseItem {
      * Beware: this is NOT the same as magnetic variation
      */
     stationDeclination: Degrees,
-    vorLocation: Coordinates,
+    location: Coordinates,
     dmeLocation?: Coordinates & { alt?: Feet },
     type: VhfNavaidType,
     class?: VorClass,

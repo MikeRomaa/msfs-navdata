@@ -1,5 +1,9 @@
 import { Feet, NauticalMiles } from 'msfs-geo';
 import { Waypoint } from './Waypoint';
+import { Level } from './Common';
+import { VhfNavaid } from './VhfNavaid';
+import { Airport } from './Airport';
+import { NdbNavaid } from './NdbNavaid';
 
 export enum AirwayType {
     Airline,
@@ -11,12 +15,6 @@ export enum AirwayType {
     Ats,
 }
 
-export enum AirwayLevel {
-    Both = 1 << 0,
-    High = 1 << 1,
-    Low = 1 << 2,
-}
-
 export enum AirwayDirection {
     Either,
     Forward,
@@ -26,8 +24,8 @@ export enum AirwayDirection {
 export interface Airway {
     databaseId: string,
     ident: string,
-    level: AirwayLevel,
-    fixes: Waypoint[],
+    level: Level,
+    fixes: (Airport | NdbNavaid | Waypoint | VhfNavaid)[],
     turnRadius?: NauticalMiles,
     rnp?: NauticalMiles,
     direction: AirwayDirection,

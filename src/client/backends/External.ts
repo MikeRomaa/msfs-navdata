@@ -1,25 +1,27 @@
 import { Coordinates, NauticalMiles } from 'msfs-geo';
+import fetch from 'node-fetch';
 import {
     Airport,
     Airway,
-    AirwayLevel,
     Approach,
     Arrival,
-    Departure,
-    Runway,
     DatabaseIdent,
+    DataInterface,
+    Departure,
     IlsNavaid,
     Marker,
+    ProcedureLeg,
+    Level,
     NdbClass,
     NdbNavaid,
-    ProcedureLeg,
+    ProcedureType,
+    RestrictiveAirspace,
+    Runway,
     RunwaySurfaceType,
     VhfNavaid,
     VhfNavaidType,
     VorClass,
     Waypoint,
-    DataInterface,
-    RestrictiveAirspace,
 } from '../../shared';
 import { AirportCommunication } from '../../shared/types/Communication';
 import { ControlledAirspace } from '../../shared/types/Airspace';
@@ -52,16 +54,32 @@ export class ExternalBackend implements DataInterface {
         return this.fetchApi(`airport/${airportIdentifier}/runways`);
     }
 
-    getDepartures(airportIdentifier: string): Promise<Departure[]> {
-        return this.fetchApi(`airport/${airportIdentifier}/departures`);
+    getDepartures(airportIdentifier: string, idents: string[]): Promise<Departure[]> {
+        return this.fetchApi(`airport/${airportIdentifier}/departures/${idents.join()}`);
     }
 
-    getArrivals(airportIdentifier: string): Promise<Arrival[]> {
-        return this.fetchApi(`airport/${airportIdentifier}/arrivals`);
+    getArrivals(airportIdentifier: string, idents: string[]): Promise<Arrival[]> {
+        return this.fetchApi(`airport/${airportIdentifier}/arrivals/${idents.join()}`);
     }
 
-    getApproaches(airportIdentifier: string): Promise<Approach[]> {
-        return this.fetchApi(`airport/${airportIdentifier}/approaches`);
+    getApproaches(airportIdentifier: string, idents: string[]): Promise<Approach[]> {
+        return this.fetchApi(`airport/${airportIdentifier}/approaches/${idents.join()}`);
+    }
+
+    getProcedureSummary(airportIdentifier: string, type: ProcedureType, runways?: string[]): Promise<string[]> {
+        switch (type) {
+        default:
+        case ProcedureType.Departure:
+        case ProcedureType.Arrival:
+            return this.fetchApi(
+                `airport/
+                ${airportIdentifier}/
+                ${type === ProcedureType.Departure ? 'departures' : 'arrivals'}/
+                summary${runways ? `?${runways.map((runway) => `runway=${runway}`).join('&')}` : ''}`,
+            );
+        case ProcedureType.Approach:
+            return this.fetchApi(`airport/${airportIdentifier}/approaches/summary`);
+        }
     }
 
     getHolds(airportIdentifier: string): Promise<ProcedureLeg[]> {
@@ -112,7 +130,7 @@ export class ExternalBackend implements DataInterface {
         return this.fetchApi(`nearby/airports/${center.lat},${center.long}/${range}${this.formatQuery({ longestRunwaySurfaces })}`);
     }
 
-    getNearbyAirways(center: Coordinates, range: NauticalMiles, levels?: AirwayLevel): Promise<Airway[]> {
+    getNearbyAirways(center: Coordinates, range: NauticalMiles, levels?: Level): Promise<Airway[]> {
         return this.fetchApi(`nearby/airways/${center.lat},${center.long}/${range}${this.formatQuery({ levels })}`);
     }
 

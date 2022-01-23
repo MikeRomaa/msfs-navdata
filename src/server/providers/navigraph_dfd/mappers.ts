@@ -14,14 +14,20 @@ import {
     AltitudeDescriptor,
     Approach,
     ApproachType,
+    ApproachWaypointDescriptor,
     Arrival,
     Departure,
+    ElevatedCoordinates,
     FigureOfMerit,
+    Fix,
+    FixType,
     IlsNavaid,
     LegType,
+    Level,
     LsCategory,
     Marker,
     MarkerType,
+    Navaid,
     NdbClass,
     NdbNavaid,
     ProcedureLeg,
@@ -35,9 +41,7 @@ import {
     VorClass,
     Waypoint,
     WaypointArea,
-    AirwayLevel,
-    ApproachWaypointDescriptor,
-    WaypointDescriptor, ElevatedCoordinates,
+    WaypointDescriptor,
 } from '../../../shared';
 import {
     BoundaryPath,
@@ -98,15 +102,16 @@ export class DFDMappers {
 
     public mapIls(ils: NaviIls): IlsNavaid {
         return {
+            fixType: FixType.IlsNavaid,
             icaoCode: ils.icaoCode,
             ident: ils.llzIdentifier,
             databaseId: DFDMappers.ilsNavaidDatabaseId(ils),
             frequency: ils.llzFrequency,
             stationDeclination: 0,
-            locLocation: { lat: ils.llzLatitude, long: ils.llzLongitude },
+            location: { lat: ils.llzLatitude, long: ils.llzLongitude },
             gsLocation: { lat: ils.gsLatitude, long: ils.gsLongitude, alt: ils.gsElevation },
             runwayIdent: ils.runwayIdentifier,
-            locBearing: ils.llzBearing,
+            bearing: ils.llzBearing,
             gsSlope: ils.gsAngle,
             category: this.mapLsCategory(ils.ilsMlsGlsCategory),
         };
@@ -123,7 +128,7 @@ export class DFDMappers {
             location: { lat: marker.markerLatitude, long: marker.markerLongitude },
             type: marker.markerType.substring(1) as MarkerType,
             locator: marker.markerType.charAt(0) === 'L',
-        }
+        };
     }
 
     public mapAirport(airport: NaviAirport): Airport {
@@ -142,6 +147,7 @@ export class DFDMappers {
             surfaceCode = RunwaySurfaceType.Unknown;
         }
         return {
+            fixType: FixType.Airport,
             databaseId: DFDMappers.airportDatabaseId(airport),
             ident: airport.airportIdentifier,
             icaoCode: airport.icaoCode,
@@ -182,11 +188,12 @@ export class DFDMappers {
 
     public mapRunway(runway: NaviRunway): Runway {
         return {
+            fixType: FixType.Runway,
             icaoCode: runway.icaoCode,
             ident: runway.runwayIdentifier,
             databaseId: `R  ${runway.airportIdentifier}${runway.runwayIdentifier}`,
             airportIdent: runway.airportIdentifier,
-            thresholdLocation: { lat: runway.runwayLatitude, long: runway.runwayLongitude, alt: runway.landingThresholdElevation },
+            location: { lat: runway.runwayLatitude, long: runway.runwayLongitude, alt: runway.landingThresholdElevation },
             bearing: runway.runwayTrueBearing,
             magneticBearing: runway.runwayMagneticBearing,
             gradient: runway.runwayGradient,
@@ -299,7 +306,59 @@ export class DFDMappers {
         }
     }
 
-    public mapLeg(leg: NaviProcedure, airport: Airport): ProcedureLeg {
+    public async mapLeg(leg: NaviProcedure, airport: Airport): Promise<ProcedureLeg> {
+        let waypoint: Fix | undefined;
+
+        if (leg.waypointIdentifier) {
+            switch (leg.waypointDescriptionCode[0]) {
+            case ('A'):
+                [waypoint] = (await this.queries.getAirports([leg.waypointIdentifier]));
+                break;
+            case ('G'):
+                const runway = (await this.queries.getRunways(leg.airportIdentifier)).find((runway) => runway.ident === leg.waypointIdentifier);
+                if (!runway) {
+                    throw new Error(
+                        `Runway with ident ${leg.waypointIdentifier} could not be found at ${leg.airportIdentifier} for 'Runway as Waypoint' leg within ${leg.procedureIdentifier}`,
+                    );
+                }
+                waypoint = runway;
+                break;
+            case ('N'):
+                [waypoint] = (await this.queries.getNdbNavaids([leg.waypointIdentifier], undefined, leg.waypointIcaoCode));
+                break;
+            case ('V'):
+                [waypoint] = (await this.queries.getVhfNavaids([leg.waypointIdentifier], undefined, leg.waypointIcaoCode));
+                break;
+            default:
+                const results = (await this.queries.getWaypoints([leg.waypointIdentifier], undefined, leg.waypointIcaoCode));
+                [waypoint] = results;
+                break;
+            }
+        }
+
+        const navaidLocation = { lat: leg.recommandedNavaidLatitude, long: leg.recommandedNavaidLongitude };
+
+        let recommendedNavaid: Navaid | undefined;
+
+        if (leg.recommandedNavaid) {
+            const [vhfNavaids, ndbNavaids, ils] = await Promise.all([
+                this.queries.getVhfNavaids([leg.recommandedNavaid], { lat: leg.recommandedNavaidLatitude, long: leg.recommandedNavaidLongitude }),
+                this.queries.getNdbNavaids([leg.recommandedNavaid], { lat: leg.recommandedNavaidLatitude, long: leg.recommandedNavaidLongitude }),
+                this.queries.getIlsAtAirport(leg.airportIdentifier),
+            ]);
+            if (ils.find((ils) => ils.ident === leg.recommandedNavaid)) {
+                recommendedNavaid = ils.find((ils) => ils.ident === leg.recommandedNavaid);
+            } else if (vhfNavaids.length > 0 && distanceTo(vhfNavaids[0]?.location, navaidLocation) < 0.1) {
+                [recommendedNavaid] = vhfNavaids;
+            } else if (ndbNavaids.length > 0 && distanceTo(ndbNavaids[0]?.location, navaidLocation) < 0.1) {
+                [recommendedNavaid] = ndbNavaids;
+            } else {
+                throw new Error(
+                    `recommended navaid with ident ${leg.recommandedNavaid} in procedure ${leg.procedureIdentifier} could not be found in database within 0.1 nm of specific location`,
+                );
+            }
+        }
+
         return {
             databaseId: DFDMappers.procedureDatabaseId(leg, airport.icaoCode) + leg.seqno,
             icaoCode: leg.waypointIcaoCode ?? airport.icaoCode,
@@ -307,38 +366,11 @@ export class DFDMappers {
             procedureIdent: leg.procedureIdentifier,
             type: leg.pathTermination as LegType,
             overfly: leg.waypointDescriptionCode?.charAt(1) === 'B' || leg.waypointDescriptionCode?.charAt(1) === 'Y',
-            waypoint: leg.waypointIdentifier ? {
-                icaoCode: leg.waypointIcaoCode,
-                ident: leg.waypointIdentifier, // TODO check type of waypoint and code database ID appropriately
-                location: { lat: leg.waypointLatitude, long: leg.waypointLongitude },
-                databaseId: `W${leg.waypointIcaoCode}${leg.airportIdentifier ?? '    '}${leg.waypointIdentifier}`,
-                name: leg.waypointIdentifier,
-                area: WaypointArea.Terminal, // FIXME
-            } : undefined, // TODO fetch these
-            recommendedNavaid: leg.recommandedNavaid ? {
-                ident: leg.recommandedNavaid,
-                databaseId: `W${leg.waypointIcaoCode}    ${leg.recommandedNavaid}`,
-                name: '',
-                area: WaypointArea.Terminal, // FIXME
-                icaoCode: leg.waypointIcaoCode, // FIXME
-                location: {
-                    lat: leg.recommandedNavaidLatitude,
-                    long: leg.recommandedNavaidLongitude,
-                },
-            } : undefined,
+            waypoint,
+            recommendedNavaid,
             rho: leg.rho ?? undefined,
             theta: leg.theta ?? undefined,
-            arcCentreFix: leg.centerWaypoint ? {
-                ident: leg.centerWaypoint,
-                databaseId: `W${leg.waypointIcaoCode}    ${leg.centerWaypoint}`,
-                name: '',
-                area: WaypointArea.Terminal, // FIXME
-                icaoCode: leg.waypointIcaoCode, // FIXME
-                location: {
-                    lat: leg.centerWaypointLatitude,
-                    long: leg.centerWaypointLongitude,
-                },
-            } : undefined,
+            arcCentreFix: (await this.queries.getWaypoints([leg.centerWaypoint], undefined, undefined, leg.airportIdentifier))[0],
             arcRadius: leg.arcRadius ?? undefined,
             length: leg.distanceTime === 'D' ? leg.routeDistanceHoldingDistanceTime : undefined,
             lengthTime: leg.distanceTime === 'T' ? leg.routeDistanceHoldingDistanceTime : undefined,
@@ -373,8 +405,7 @@ export class DFDMappers {
                     engineOutLegs: [],
                 });
             }
-
-            const apiLeg = this.mapLeg(leg, airport);
+            const apiLeg = await this.mapLeg(leg, airport);
             const departure = departures.get(leg.procedureIdentifier);
             let transition;
             switch (leg.routeType) {
@@ -491,7 +522,7 @@ export class DFDMappers {
                 });
             }
 
-            const apiLeg = this.mapLeg(leg, airport);
+            const apiLeg = await this.mapLeg(leg, airport);
             const arrival = arrivals.get(leg.procedureIdentifier);
             let transition;
             switch (leg.routeType) {
@@ -634,12 +665,12 @@ export class DFDMappers {
         }
     }
 
-    public mapApproaches(legs: NaviProcedure[], airport: Airport): Approach[] {
+    public async mapApproaches(legs: NaviProcedure[], airport: Airport): Promise<Approach[]> {
         const approaches: Map<string, Approach> = new Map();
 
         let missedApproachStarted = false;
         // legs are sorted in sequence order by the db... phew
-        legs.forEach((leg) => {
+        for (const leg of legs) {
             if (!approaches.has(leg.procedureIdentifier)) {
                 approaches.set(leg.procedureIdentifier, {
                     icaoCode: airport.icaoCode,
@@ -653,7 +684,7 @@ export class DFDMappers {
                 missedApproachStarted = false;
             }
 
-            const apiLeg = this.mapLeg(leg, airport);
+            const apiLeg = await this.mapLeg(leg, airport);
             const approach = approaches.get(leg.procedureIdentifier);
 
             if (leg.waypointDescriptionCode?.charAt(2) === 'M') {
@@ -707,7 +738,7 @@ export class DFDMappers {
                     console.error(`Unmappable leg ${apiLeg.ident}: ${leg.pathTermination} in ${leg.procedureIdentifier}: Approach`);
                 }
             }
-        });
+        }
 
         return Array.from(approaches.values());
     }
@@ -758,12 +789,12 @@ export class DFDMappers {
     public mapAirwayLevel(level: string): AirwayLevel {
         switch (level) {
         case 'H':
-            return AirwayLevel.High;
+            return Level.High;
         case 'L':
-            return AirwayLevel.Low;
+            return Level.Low;
         default:
         case 'B':
-            return AirwayLevel.Both;
+            return Level.Both;
         }
     }
 
@@ -778,29 +809,40 @@ export class DFDMappers {
         }
     }
 
-    public mapAirways(fixes: NaviAirwayFix[]): Airway[] {
+    public async mapAirways(fixes: NaviAirwayFix[]): Promise<Airway[]> {
         const airways: Airway[] = [];
-        fixes.forEach((fix, index) => {
+        for (let index = 0; index < fixes.length; index++) {
+            const data = fixes[index];
             if (!index || fixes[index - 1]?.waypointDescriptionCode[1] === 'E') {
                 airways.push({
-                    databaseId: DFDMappers.airwayDatabaseIdent(fix),
-                    ident: fix.routeIdentifier,
-                    level: this.mapAirwayLevel(fix.flightlevel),
+                    databaseId: DFDMappers.airwayDatabaseIdent(data),
+                    ident: data.routeIdentifier,
+                    level: this.mapAirwayLevel(data.flightlevel),
                     fixes: [],
-                    direction: this.mapAirwayDirection(fix.directionRestriction),
-                    minimumAltitudeForward: fix.minimumAltitude1,
-                    minimumAltitudeBackward: fix.minimumAltitude2,
-                    maximumAltitude: fix.maximumAltitude,
+                    direction: this.mapAirwayDirection(data.directionRestriction),
+                    minimumAltitudeForward: data.minimumAltitude1,
+                    minimumAltitudeBackward: data.minimumAltitude2,
+                    maximumAltitude: data.maximumAltitude,
                 });
             }
-            airways[airways.length - 1].fixes.push({
-                icaoCode: fix.icaoCode,
-                databaseId: `W${fix.icaoCode}    ${fix.waypointIdentifier}`, // TODO function
-                ident: fix.waypointIdentifier,
-                location: { lat: fix.waypointLatitude, long: fix.waypointLongitude },
-                area: WaypointArea.Enroute, // TODO
-            });
-        });
+            let waypoint: Fix | undefined;
+
+            switch (data.waypointDescriptionCode[0]) {
+            case ('A'):
+                [waypoint] = (await this.queries.getAirports([data.waypointIdentifier]));
+                break;
+            case ('N'):
+                [waypoint] = (await this.queries.getNdbNavaids([data.waypointIdentifier], undefined, data.icaoCode));
+                break;
+            case ('V'):
+                [waypoint] = (await this.queries.getVhfNavaids([data.waypointIdentifier], undefined, data.icaoCode));
+                break;
+            default:
+                [waypoint] = (await this.queries.getWaypoints([data.waypointIdentifier], undefined, data.icaoCode));
+                break;
+            }
+            airways[airways.length - 1].fixes.push(waypoint);
+        }
         return airways;
     }
 
@@ -1094,6 +1136,7 @@ export class DFDMappers {
 
     public mapWaypoint(waypoint: NaviWaypoint, distanceFrom?: Coordinates): Waypoint {
         return {
+            fixType: FixType.Waypoint,
             databaseId: DFDMappers.waypointDatabaseId(waypoint),
             ident: waypoint.waypointIdentifier,
             icaoCode: waypoint.icaoCode,
@@ -1106,6 +1149,7 @@ export class DFDMappers {
 
     public mapVhfNavaid(navaid: NaviVhfNavaid, distanceFrom?: Coordinates): VhfNavaid {
         return {
+            fixType: FixType.VhfNavaid,
             databaseId: DFDMappers.vhfNavaidDatabaseId(navaid),
             ident: navaid.vorIdentifier ?? navaid.dmeIdent,
             name: navaid.vorName,
@@ -1115,7 +1159,7 @@ export class DFDMappers {
             range: navaid.range,
             stationDeclination: navaid.stationDeclination,
             type: this.mapVhfType(navaid),
-            vorLocation: DFDMappers.mapCoordinates(navaid.vorLatitude, navaid.vorLongitude),
+            location: DFDMappers.mapCoordinates(navaid.vorLatitude, navaid.vorLongitude),
             dmeLocation: navaid.dmeLatitude !== null ? DFDMappers.mapElevatedCoordinates(navaid.dmeLatitude, navaid.dmeLongitude, navaid.dmeElevation) : undefined,
             class: this.mapVorClass(navaid),
             ilsDmeBias: navaid.ilsdmeBias || undefined,
@@ -1170,6 +1214,7 @@ export class DFDMappers {
 
     public mapNdbNavaid(navaid: NaviNdbNavaid, distanceFrom?: Coordinates): NdbNavaid {
         return {
+            fixType: FixType.NdbNavaid,
             databaseId: DFDMappers.ndbNavaidDatabaseId(navaid),
             ident: navaid.ndbIdentifier,
             icaoCode: navaid.icaoCode,

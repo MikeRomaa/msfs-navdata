@@ -67,18 +67,16 @@ export class ExternalBackend implements DataInterface {
     }
 
     getProcedureSummary(airportIdentifier: string, type: ProcedureType, runways?: string[]): Promise<string[]> {
+        const prefix = `airport/${airportIdentifier}/`;
         switch (type) {
         default:
         case ProcedureType.Departure:
         case ProcedureType.Arrival:
             return this.fetchApi(
-                `airport/
-                ${airportIdentifier}/
-                ${type === ProcedureType.Departure ? 'departures' : 'arrivals'}/
-                summary${runways ? `?${runways.map((runway) => `runway=${runway}`).join('&')}` : ''}`,
+                `${prefix}${type === ProcedureType.Departure ? 'departures' : 'arrivals'}/summary${runways ? `?${runways.map((runway) => `runway=${runway}`).join('&')}` : ''}`,
             );
         case ProcedureType.Approach:
-            return this.fetchApi(`airport/${airportIdentifier}/approaches/summary`);
+            return this.fetchApi(`${prefix}approaches/summary`);
         }
     }
 

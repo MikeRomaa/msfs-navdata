@@ -1,4 +1,4 @@
-import { Airway, IlsNavaid, NdbNavaid, Waypoint } from '../../../shared';
+import { Airway, IlsNavaid, NdbNavaid, ProcedureLeg, Waypoint } from '../../../shared';
 import { Airport } from '../../../shared/types/Airport';
 import { Approach } from '../../../shared/types/Approach';
 import { Arrival } from '../../../shared/types/Arrival';

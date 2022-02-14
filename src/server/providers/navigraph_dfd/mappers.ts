@@ -1217,6 +1217,7 @@ export class DFDMappers {
             fixType: FixType.NdbNavaid,
             databaseId: DFDMappers.ndbNavaidDatabaseId(navaid),
             ident: navaid.ndbIdentifier,
+            name: navaid.ndbName,
             icaoCode: navaid.icaoCode,
             frequency: navaid.ndbFrequency,
             location: DFDMappers.mapCoordinates(navaid.ndbLatitude, navaid.ndbLongitude),

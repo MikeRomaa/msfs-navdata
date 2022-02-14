@@ -7,6 +7,7 @@ export interface NdbNavaid extends DatabaseItem {
 
     frequency: KiloHertz,
     location: Coordinates,
+    name: string,
     class: NdbClass,
     /**
      * Beat frequency oscillator required to make identifier audible

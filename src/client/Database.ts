@@ -1,24 +1,25 @@
 import { Coordinates, NauticalMiles } from 'msfs-geo';
 import {
     Airport,
-    Level,
+    Airway,
     Approach,
     Arrival,
+    DatabaseIdent,
+    DataInterface,
     Departure,
-    Runway,
-    Airway,
     IlsNavaid,
-    NdbNavaid,
-    NdbClass,
+    Level,
     Marker,
+    NdbClass,
+    NdbNavaid,
     ProcedureLeg,
+    ProcedureType,
+    RestrictiveAirspace,
+    Runway,
     VhfNavaid,
     VhfNavaidType,
     VorClass,
     Waypoint,
-    DatabaseIdent,
-    DataInterface,
-    RestrictiveAirspace, ProcedureType,
 } from '../shared';
 import { AirportCommunication } from '../shared/types/Communication';
 import { ControlledAirspace } from '../shared/types/Airspace';
@@ -58,8 +59,16 @@ export class Database {
         return this.backend.getApproaches(airportIdentifier, idents);
     }
 
-    public async getProcedureSummary(airportIdentifier: string, type: ProcedureType, runways?: string[]): Promise<string[]> {
+    public async getProcedureSummary(airportIdentifier: string, type: ProcedureType.Departure | ProcedureType.Arrival, runways?: string[]): Promise<string[]> {
         return this.backend.getProcedureSummary(airportIdentifier, type, runways);
+    }
+
+    public async getApproachSummary(airportIdentifier: string, arrival?: Arrival): Promise<string[]> {
+        const approaches = await this.backend.getProcedureSummary(airportIdentifier, ProcedureType.Approach);
+        if (arrival) {
+            return approaches.filter((approach) => arrival?.runwayTransitions.find((transition) => Database.approachToRunway(approach) === transition.ident));
+        }
+        return approaches;
     }
 
     public async getHolds(fixIdentifier: string, airportIdentifier: string): Promise<ProcedureLeg[]> {

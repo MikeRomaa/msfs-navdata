@@ -17,7 +17,7 @@ import {
     ApproachWaypointDescriptor,
     Arrival,
     Departure,
-    ElevatedCoordinates,
+    ElevatedCoordinates, EnRouteFix,
     FigureOfMerit,
     Fix,
     FixType,
@@ -825,12 +825,9 @@ export class DFDMappers {
                     maximumAltitude: data.maximumAltitude,
                 });
             }
-            let waypoint: Fix | undefined;
+            let waypoint: EnRouteFix;
 
             switch (data.waypointDescriptionCode[0]) {
-            case ('A'):
-                [waypoint] = (await this.queries.getAirports([data.waypointIdentifier]));
-                break;
             case ('N'):
                 [waypoint] = (await this.queries.getNdbNavaids([data.waypointIdentifier], undefined, data.icaoCode));
                 break;

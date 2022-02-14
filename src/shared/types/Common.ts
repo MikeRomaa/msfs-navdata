@@ -63,7 +63,8 @@ export enum FixType {
 
 export type Navaid = GlsNavaid | IlsNavaid | NdbNavaid | VhfNavaid;
 
-export type Fix = Airport | NdbNavaid | Runway | VhfNavaid | Waypoint;
+export type Fix = Airport | Runway | EnRouteFix;
+export type EnRouteFix = NdbNavaid | VhfNavaid | Waypoint;
 
 export enum Level {
     Both = 1 << 0,

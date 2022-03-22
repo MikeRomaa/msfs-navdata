@@ -11,9 +11,7 @@ import { IlsNavaid } from './IlsNavaid';
 export type FeetPerMinute = number;
 export type FlightLevel = number;
 export type KiloHertz = number;
-export type Knots = number;
 export type MegaHertz = number;
-export type Minutes = number;
 
 export interface DatabaseItem {
     /**

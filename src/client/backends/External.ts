@@ -1,5 +1,4 @@
 import { Coordinates, NauticalMiles } from 'msfs-geo';
-import fetch from 'node-fetch';
 import {
     Airport,
     Airway,
@@ -27,18 +26,19 @@ import { AirportCommunication } from '../../shared/types/Communication';
 import { ControlledAirspace } from '../../shared/types/Airspace';
 
 export class ExternalBackend implements DataInterface {
-    private readonly apiBase: string;
-
     /**
      *
      * @param apiBase base URL for the
+     * @param fetch reference to fetch function to be used for calling api
      */
-    constructor(apiBase: string) {
-        this.apiBase = apiBase;
+    constructor(
+        private readonly apiBase: string,
+        private readonly fetch: typeof globalThis.fetch,
+    ) {
     }
 
     async fetchApi(path: string): Promise<any> {
-        const resp = fetch(`${this.apiBase}/${path}`);
+        const resp = this.fetch(`${this.apiBase}/${path}`);
         return (await resp).json();
     }
 

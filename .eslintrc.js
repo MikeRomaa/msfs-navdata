@@ -11,5 +11,7 @@ module.exports = {
         "no-undef": "off",
         "import/no-unresolved": "off",
         "no-bitwise": "off",
+        "no-useless-constructor": "off",
+        "no-empty-function": "off",
     }
 };
